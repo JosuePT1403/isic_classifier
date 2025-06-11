@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clasificador CIIU de Avisos Laborales</title>
-    <!-- Tailwind CSS CDN -->
+    <title>Clasificador CIIU (Rev. 5) de Avisos Laborales</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -62,7 +61,7 @@
 <body class="leading-relaxed">
     <div id="app-container" class="min-h-screen bg-gray-100 text-gray-800 flex flex-col items-center py-10">
         <div class="container mx-auto p-6 bg-white rounded-lg shadow-xl">
-            <h1 class="text-4xl font-extrabold text-blue-800 mb-6 text-center">Clasificador CIIU de Avisos Laborales</h1>
+            <h1 class="text-4xl font-extrabold text-blue-800 mb-6 text-center">Clasificador CIIU (Rev. 5) de Avisos Laborales</h1>
             <p class="text-center text-gray-600 mb-8">Pega el título y una parte del cuerpo de **varios avisos laborales**, separados por la línea `--- AVISO ---`.</p>
 
             <div class="mb-6">
@@ -87,7 +86,7 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
                     id="classifyButton"
                     class="btn-primary"
                 >
-                    Clasificar Avisos (CIIU Rev. 4)
+                    Clasificar Avisos (CIIU Rev. 5)
                 </button>
             </div>
 
@@ -165,8 +164,8 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
                     return;
                 }
 
-                // Prompt for the LLM to classify based on ISIC Rev. 4 for multiple postings
-                const prompt = `Clasifica los siguientes avisos laborales de acuerdo con la Clasificación Industrial Internacional Uniforme de todas las Actividades Económicas (CIIU), Revisión 4.
+                // Prompt for the LLM to classify based on ISIC Rev. 5
+                const prompt = `Clasifica los siguientes avisos laborales de acuerdo con la Clasificación Industrial Internacional Uniforme de todas las Actividades Económicas (CIIU), Revisión 5.
 Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe contener las claves "aviso_id" (un identificador numérico simple, comenzando en 1), "codigo_ciiu" (código de 4 dígitos), y "descripcion_ciiu" (descripción principal).
 Si no puedes clasificar un aviso específico, usa "N/A" para el código y "No se pudo clasificar" para la descripción de ese aviso.
 
@@ -204,7 +203,7 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                                     "codigo_ciiu": { "type": "STRING" },
                                     "descripcion_ciiu": { "type": "STRING" }
                                 },
-                                "propertyOrdering": ["aviso_id", "codigo_ciiu", "descripcion_ciiu"]
+                                "propertyOrdering": ["codigo_ciiu", "descripcion_ciiu", "aviso_id"] // Reordered for better consistency with prompt example
                             }
                         }
                     }
@@ -229,10 +228,13 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                     if (Array.isArray(classifications) && classifications.length > 0) {
                         let htmlResult = '';
                         classifications.forEach((classification, index) => {
-                            const originalPosting = jobPostings[index] || 'Aviso no encontrado';
+                            // Find the original posting by aviso_id if available, otherwise use index
+                            const originalPostingIndex = classification.aviso_id ? classification.aviso_id - 1 : index;
+                            const originalPosting = jobPostings[originalPostingIndex] || 'Aviso no encontrado';
+
                             htmlResult += `
                                 <div class="mb-4 p-3 border border-gray-300 rounded-md bg-white shadow-sm">
-                                    <p class="font-bold text-md text-blue-700 mb-2">Aviso ${classification.aviso_id || index + 1}:</p>
+                                    <p class="font-bold text-md text-blue-700 mb-2">Aviso ${classification.aviso_id || originalPostingIndex + 1}:</p>
                                     <pre class="whitespace-pre-wrap text-xs text-gray-600 mb-2 max-h-24 overflow-y-auto border border-gray-200 p-2 rounded">${originalPosting}</pre>
                                     <p class="font-bold text-lg">Código CIIU: <span class="text-blue-800">${classification.codigo_ciiu || 'N/A'}</span></p>
                                     <p class="mt-1">Descripción: <span class="text-gray-800">${classification.descripcion_ciiu || 'No clasificado'}</span></p>
