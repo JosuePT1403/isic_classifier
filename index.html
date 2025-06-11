@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clasificador CIIU (Rev. 5) de Avisos Laborales</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -168,6 +169,7 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
                 const prompt = `Clasifica los siguientes avisos laborales de acuerdo con la Clasificación Industrial Internacional Uniforme de todas las Actividades Económicas (CIIU), Revisión 5.
 Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe contener las claves "aviso_id" (un identificador numérico simple, comenzando en 1), "codigo_ciiu" (código de 4 dígitos), y "descripcion_ciiu" (descripción principal).
 Si no puedes clasificar un aviso específico, usa "N/A" para el código y "No se pudo clasificar" para la descripción de ese aviso.
+¡IMPORTANTE! Tu respuesta DEBE ser solo el array JSON, sin texto adicional, preámbulo, postámbulo o bloques de markdown (como \`\`\`json).
 
 Formato de respuesta esperado (ejemplo de array JSON):
 [
@@ -217,13 +219,42 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                     body: JSON.stringify(payload)
                 });
 
+                // Check if the HTTP response itself was successful
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    console.error("HTTP error response:", response.status, response.statusText, errorBody);
+                    // Attempt to parse JSON error if available, otherwise show generic message
+                    try {
+                        const errorJson = JSON.parse(errorBody);
+                        displayMessage(`Error de la API: ${errorJson.error.message || response.statusText}. Código: ${response.status}`, 'error');
+                    } catch (e) {
+                        displayMessage(`Error de la API: ${response.statusText}. Código: ${response.status}`, 'error');
+                    }
+                    classificationResultElem.innerHTML = `<p>Error al conectar con la API. Código de estado: ${response.status}.</p>`;
+                    return; // Exit early
+                }
+
                 const result = await response.json();
 
+                // Check for candidates and content. If missing, log the full result for debugging.
                 if (result.candidates && result.candidates.length > 0 &&
                     result.candidates[0].content && result.candidates[0].content.parts &&
                     result.candidates[0].content.parts.length > 0) {
-                    const jsonResponse = result.candidates[0].content.parts[0].text;
-                    const classifications = JSON.parse(jsonResponse); // Expecting an array
+                    let jsonResponse = result.candidates[0].content.parts[0].text;
+                    
+                    // Attempt to clean the JSON string if it contains markdown fences
+                    jsonResponse = jsonResponse.replace(/```json\n|```/g, '').trim();
+
+                    let classifications;
+                    try {
+                        classifications = JSON.parse(jsonResponse); // Expecting an array
+                    } catch (e) {
+                        console.error("Error parsing JSON response from LLM:", e);
+                        console.error("Raw LLM response (could not parse):", jsonResponse);
+                        displayMessage('Error: La respuesta del modelo no es un JSON válido. Revisa la consola.', 'error');
+                        classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido. Intenta de nuevo o simplifica el aviso.</p>';
+                        return; // Exit if JSON parsing fails
+                    }
 
                     if (Array.isArray(classifications) && classifications.length > 0) {
                         let htmlResult = '';
@@ -244,7 +275,9 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                         classificationResultElem.innerHTML = htmlResult;
                         displayMessage('Clasificación realizada con éxito para todos los avisos.', 'success');
                     } else {
-                        throw new Error('La respuesta del modelo no es una lista de clasificaciones válida.');
+                        console.error("La respuesta del modelo no es una lista de clasificaciones válida:", classifications);
+                        displayMessage('Error: El modelo no devolvió una lista de clasificaciones válida.', 'error');
+                        classificationResultElem.innerHTML = '<p>Error: El modelo no pudo clasificar los avisos como una lista.</p>';
                     }
                 } else {
                     console.error("Estructura de respuesta inesperada del LLM (o contenido vacío):", result);
