@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clasificador CIIU de Avisos Laborales</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            color: #333;
+        }
+        .container {
+            max-width: 900px; /* Adjusted max-width for cleaner layout */
+        }
+        textarea {
+            resize: vertical;
+            min-height: 250px;
+        }
+        button {
+            transition: all 0.2s ease-in-out;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .btn-primary {
+            background-color: #2563eb; /* blue-600 */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            border-radius: 0.375rem;
+        }
+        .btn-primary:hover {
+            background-color: #1d4ed8; /* blue-700 */
+        }
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            font-weight: 600;
+            color: #4f46e5; /* indigo-600 */
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4f46e5; /* indigo-600 */
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="leading-relaxed">
+    <div id="app-container" class="min-h-screen bg-gray-100 text-gray-800 flex flex-col items-center py-10">
+        <div class="container mx-auto p-6 bg-white rounded-lg shadow-xl">
+            <h1 class="text-4xl font-extrabold text-blue-800 mb-6 text-center">Clasificador CIIU de Avisos Laborales</h1>
+            <p class="text-center text-gray-600 mb-8">Pega el título y una parte del cuerpo de **varios avisos laborales**, separados por la línea `--- AVISO ---`.</p>
+
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-blue-700 mb-3">Texto(s) del Aviso Laboral</h2>
+                <textarea
+                    id="jobPostingText"
+                    class="w-full p-4 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    placeholder="Ejemplo:
+Título: Ingeniero de Software Senior
+Cuerpo: Buscamos un ingeniero de software experimentado para desarrollar y mantener aplicaciones web en un entorno ágil. Experiencia con Python y React es un plus.
+
+--- AVISO ---
+
+Título: Especialista en Marketing Digital
+Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas publicitarias. Experiencia con Google Ads y Facebook Ads es deseable.
+"
+                ></textarea>
+            </div>
+
+            <div class="flex justify-center mt-6">
+                <button
+                    id="classifyButton"
+                    class="btn-primary"
+                >
+                    Clasificar Avisos (CIIU Rev. 4)
+                </button>
+            </div>
+
+            <div id="loadingIndicator" class="loading-indicator hidden mt-6">
+                <div class="spinner"></div> Clasificando avisos...
+            </div>
+
+            <div class="mt-8 p-6 bg-green-50 rounded-lg shadow-md">
+                <h2 class="text-2xl font-bold text-green-700 mb-3">Resultados de la Clasificación CIIU</h2>
+                <div id="classificationResult" class="p-4 border border-green-300 rounded-md bg-gray-50 min-h-[100px] text-gray-700">
+                    <p>Las clasificaciones aparecerán aquí (Código y Descripción CIIU).</p>
+                </div>
+                <button
+                    id="copyResultButton"
+                    class="btn-primary mt-4 w-full md:w-auto"
+                >
+                    Copiar Resultados
+                </button>
+            </div>
+            <div id="messageDisplay" class="mt-6 text-center text-red-600 font-semibold"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        const jobPostingTextElem = document.getElementById('jobPostingText');
+        const classifyButton = document.getElementById('classifyButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const classificationResultElem = document.getElementById('classificationResult');
+        const copyResultButton = document.getElementById('copyResultButton');
+        const messageDisplay = document.getElementById('messageDisplay');
+
+        // IMPORTANT: Replace "TU_CLAVE_DE_API_DE_GEMINI_AQUI" with your actual Gemini API Key.
+        // This key will be publicly visible in the source code if deployed on Vercel.
+        const apiKey = "AIzaSyA7IkWUlourFP4_sf9014fcHIlM-oFIx-U"; 
+        // For Canvas environment, leave apiKey = "" if you want Canvas to inject it.
+        // For Vercel, you MUST put your actual key here for a simple HTML/JS app.
+
+
+        // Function to display messages to the user
+        function displayMessage(message, type = 'info') {
+            messageDisplay.textContent = message;
+            if (type === 'error') {
+                messageDisplay.className = 'mt-6 text-center text-red-600 font-semibold';
+            } else if (type === 'success') {
+                messageDisplay.className = 'mt-6 text-center text-green-600 font-semibold';
+            } else {
+                messageDisplay.className = 'mt-6 text-center text-gray-600 font-semibold';
+            }
+            setTimeout(() => {
+                messageDisplay.textContent = '';
+            }, 5000);
+        }
+
+        classifyButton.addEventListener('click', async () => {
+            const rawJobPostingText = jobPostingTextElem.value.trim();
+
+            if (!rawJobPostingText) {
+                displayMessage('Por favor, pega el texto de uno o más avisos laborales para clasificar.', 'error');
+                return;
+            }
+
+            loadingIndicator.classList.remove('hidden');
+            classifyButton.disabled = true;
+            classificationResultElem.innerHTML = '<p>Clasificando...</p>';
+            messageDisplay.textContent = '';
+
+            try {
+                // Split job postings by the defined delimiter
+                const jobPostings = rawJobPostingText.split('--- AVISO ---').map(s => s.trim()).filter(s => s.length > 0);
+
+                if (jobPostings.length === 0) {
+                    displayMessage('No se detectaron avisos laborales válidos. Asegúrate de usar "--- AVISO ---" para separarlos.', 'error');
+                    loadingIndicator.classList.add('hidden');
+                    classifyButton.disabled = false;
+                    return;
+                }
+
+                // Prompt for the LLM to classify based on ISIC Rev. 4 for multiple postings
+                const prompt = `Clasifica los siguientes avisos laborales de acuerdo con la Clasificación Industrial Internacional Uniforme de todas las Actividades Económicas (CIIU), Revisión 4.
+Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe contener las claves "aviso_id" (un identificador numérico simple, comenzando en 1), "codigo_ciiu" (código de 4 dígitos), y "descripcion_ciiu" (descripción principal).
+Si no puedes clasificar un aviso específico, usa "N/A" para el código y "No se pudo clasificar" para la descripción de ese aviso.
+
+Formato de respuesta esperado (ejemplo de array JSON):
+[
+  {
+    "aviso_id": 1,
+    "codigo_ciiu": "6201",
+    "descripcion_ciiu": "Actividades de programación informática"
+  },
+  {
+    "aviso_id": 2,
+    "codigo_ciiu": "7020",
+    "descripcion_ciiu": "Actividades de consultoría de gestión"
+  }
+]
+
+Avisos laborales a clasificar, cada uno precedido por 'Aviso [ID_NUMERO]:':
+${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
+`;
+
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    "aviso_id": { "type": "NUMBER" },
+                                    "codigo_ciiu": { "type": "STRING" },
+                                    "descripcion_ciiu": { "type": "STRING" }
+                                },
+                                "propertyOrdering": ["aviso_id", "codigo_ciiu", "descripcion_ciiu"]
+                            }
+                        }
+                    }
+                };
+
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const jsonResponse = result.candidates[0].content.parts[0].text;
+                    const classifications = JSON.parse(jsonResponse); // Expecting an array
+
+                    if (Array.isArray(classifications) && classifications.length > 0) {
+                        let htmlResult = '';
+                        classifications.forEach((classification, index) => {
+                            const originalPosting = jobPostings[index] || 'Aviso no encontrado';
+                            htmlResult += `
+                                <div class="mb-4 p-3 border border-gray-300 rounded-md bg-white shadow-sm">
+                                    <p class="font-bold text-md text-blue-700 mb-2">Aviso ${classification.aviso_id || index + 1}:</p>
+                                    <pre class="whitespace-pre-wrap text-xs text-gray-600 mb-2 max-h-24 overflow-y-auto border border-gray-200 p-2 rounded">${originalPosting}</pre>
+                                    <p class="font-bold text-lg">Código CIIU: <span class="text-blue-800">${classification.codigo_ciiu || 'N/A'}</span></p>
+                                    <p class="mt-1">Descripción: <span class="text-gray-800">${classification.descripcion_ciiu || 'No clasificado'}</span></p>
+                                </div>
+                            `;
+                        });
+                        classificationResultElem.innerHTML = htmlResult;
+                        displayMessage('Clasificación realizada con éxito para todos los avisos.', 'success');
+                    } else {
+                        throw new Error('La respuesta del modelo no es una lista de clasificaciones válida.');
+                    }
+                } else {
+                    console.error("Estructura de respuesta inesperada del LLM (o contenido vacío):", result);
+                    displayMessage('Error al clasificar. No se recibió una respuesta válida del modelo.', 'error');
+                    classificationResultElem.innerHTML = '<p>Error: No se pudo generar la clasificación para todos los avisos. Revisa la consola para más detalles.</p>';
+                }
+
+            } catch (error) {
+                console.error("Error durante la llamada a la API:", error);
+                displayMessage('Error en la conexión o procesamiento de la API. Intenta de nuevo más tarde.', 'error');
+                classificationResultElem.innerHTML = '<p>Error: Problema de red o formato de respuesta. Revisa la consola.</p>';
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                classifyButton.disabled = false;
+            }
+        });
+
+        copyResultButton.addEventListener('click', () => {
+            const resultDivs = classificationResultElem.querySelectorAll('div');
+            let textToCopy = '';
+            resultDivs.forEach(div => {
+                const noticeId = div.querySelector('.font-bold.text-md').textContent.trim();
+                const originalPosting = div.querySelector('pre').textContent.trim();
+                const ciiuCode = div.querySelector('.font-bold.text-lg span').textContent.trim();
+                const ciiuDesc = div.querySelector('.mt-1 span').textContent.trim();
+                
+                textToCopy += `${noticeId}\nOriginal:\n${originalPosting}\nClasificación CIIU: ${ciiuCode} - ${ciiuDesc}\n\n`;
+            });
+
+            if (textToCopy && !textToCopy.includes("Clasificando...") && !textToCopy.includes("Error:")) {
+                const tempTextArea = document.createElement('textarea');
+                tempTextArea.value = textToCopy;
+                document.body.appendChild(tempTextArea);
+                tempTextArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempTextArea);
+                displayMessage('Resultados copiados al portapapeles.', 'success');
+            } else {
+                displayMessage('No hay resultados válidos para copiar.', 'info');
+            }
+        });
+    </script>
+</body>
+</html>
