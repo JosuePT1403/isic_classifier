@@ -242,8 +242,20 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                     result.candidates[0].content.parts.length > 0) {
                     let jsonResponse = result.candidates[0].content.parts[0].text;
                     
-                    // Attempt to clean the JSON string if it contains markdown fences
-                    jsonResponse = jsonResponse.replace(/```json\n|```/g, '').trim();
+                    // NEW: More aggressive cleaning for JSON from LLM
+                    // Remove any markdown code block fences (e.g., ```json, ```javascript, ```python, ```)
+                    jsonResponse = jsonResponse.replace(/```(?:json|javascript|python)?\s*([\s\S]*?)\s*```/g, '$1').trim();
+                    // Remove any text before/after potential JSON array/object structures
+                    const jsonMatch = jsonResponse.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        jsonResponse = jsonMatch[0];
+                    } else {
+                        console.error("No JSON structure found after cleaning:", jsonResponse);
+                        displayMessage('Error: No se encontró una estructura JSON válida en la respuesta del modelo.', 'error');
+                        classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido. Intenta de nuevo o simplifica el aviso.</p>';
+                        return;
+                    }
+
 
                     let classifications;
                     try {
