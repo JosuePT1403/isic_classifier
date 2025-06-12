@@ -296,12 +296,16 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                     
                     // More aggressive cleaning for JSON from LLM
                     jsonResponse = jsonResponse.replace(/```(?:json|javascript|python)?\s*([\s\S]*?)\s*```/g, '$1').trim();
-                    const jsonMatch = jsonResponse.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        jsonResponse = jsonMatch[0];
+                    
+                    // Find the first '[' and last ']' to extract the array, ignore anything outside
+                    const firstBracket = jsonResponse.indexOf('[');
+                    const lastBracket = jsonResponse.lastIndexOf(']');
+
+                    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+                        jsonResponse = jsonResponse.substring(firstBracket, lastBracket + 1);
                     } else {
-                        console.error("No JSON structure found after cleaning:", jsonResponse);
-                        displayMessage('Error: No se encontró una estructura JSON válida en la respuesta del modelo.', 'error');
+                        console.error("No valid JSON array structure found after cleaning:", jsonResponse);
+                        displayMessage('Error: No se encontró una estructura JSON válida (array) en la respuesta del modelo.', 'error');
                         classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido. Intenta de nuevo o simplifica el aviso.</p>';
                         return;
                     }
@@ -330,6 +334,7 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                             
                             // Find the classification for this specific original posting by its ID
                             const foundClassification = classifications.find(
+                                // Use extractAvisoId on the classification's aviso_id to normalize it for comparison
                                 c => c.aviso_id && extractAvisoId(String(c.aviso_id)) === currentAvisoId
                             );
 
