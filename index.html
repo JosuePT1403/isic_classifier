@@ -161,7 +161,7 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
             }
 
             // Try to match "Aviso X" or "Aviso X:" where X is the number
-            const avisoMatch = idString.match(/(?:Aviso\s*|^)?(\d+)(?:\s*|:|$)/i); // Added ?: for optional "Aviso" and ":"
+            const avisoMatch = idString.match(/(?:Aviso\s*|^)?(\d+)(?:\s*|:|$)/i); 
             if (avisoMatch && avisoMatch[1]) {
                 return avisoMatch[1];
             }
@@ -214,11 +214,13 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
                     return;
                 }
 
-                // Prompt for the LLM to classify based on ISIC Rev. 4 - SIMPLIFIED
+                // Prompt for the LLM to classify based on ISIC Rev. 4 - SIMPLIFIED AGAIN
                 const prompt = `Clasifica los siguientes avisos laborales de acuerdo con la Clasificación Industrial Internacional Uniforme de todas las Actividades Económicas (CIIU), Revisión 4.
-Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe tener las claves "aviso_id" (un número secuencial como cadena, "1", "2", etc.), "codigo_ciiu" (el código de 4 dígitos de la CIIU Rev. 4), y "descripcion_ciiu" (la descripción oficial de esa actividad).
+Tu respuesta DEBE ser ÚNICAMENTE una lista (array) de objetos JSON. Cada objeto en la lista debe tener exactamente las claves "aviso_id", "codigo_ciiu" y "descripcion_ciiu".
+Para "aviso_id", usa un número secuencial como cadena de texto (ej., "1", "2", "3") correspondiente al orden de los avisos proporcionados.
+Para "codigo_ciiu", usa el código de 4 dígitos de la CIIU Rev. 4.
+Para "descripcion_ciiu", usa la descripción principal oficial de esa actividad.
 Si un aviso laboral no puede ser clasificado claramente, usa "N/A" para "codigo_ciiu" y "No se pudo clasificar" para "descripcion_ciiu".
-Asegúrate de que el campo "aviso_id" contenga **SOLO el número de identificación como una cadena de texto** (ej. "1", "2"), sin comas, llaves, comillas dobles, el prefijo "Aviso" o cualquier otro texto/dato JSON. La salida DEBE ser exclusivamente el array JSON.
 
 Avisos laborales a clasificar, cada uno precedido por 'Aviso [ID_NUMERO]:':
 ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
@@ -231,18 +233,7 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                     contents: chatHistory,
                     generationConfig: {
                         responseMimeType: "application/json",
-                        responseSchema: {
-                            type: "ARRAY",
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    "aviso_id": { "type": "STRING" }, 
-                                    "codigo_ciiu": { "type": "STRING" },
-                                    "descripcion_ciiu": { "type": "STRING" }
-                                },
-                                "propertyOrdering": ["codigo_ciiu", "descripcion_ciiu", "aviso_id"] 
-                            }
-                        }
+                        // Removed responseSchema as it seems to cause issues with LLM's internal output
                     }
                 };
 
@@ -284,23 +275,28 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
 
 
                     // More aggressive cleaning for JSON from LLM
+                    // Remove markdown code block fences and any surrounding non-JSON text
                     jsonResponse = jsonResponse.replace(/```(?:json|javascript|python)?\s*([\s\S]*?)\s*```/g, '$1').trim();
                     
-                    // Find the first '[' and last ']' to extract the array, ignore anything outside
-                    const firstBracket = jsonResponse.indexOf('[');
-                    const lastBracket = jsonResponse.lastIndexOf(']');
-
-                    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-                        jsonResponse = jsonResponse.substring(firstBracket, lastBracket + 1);
+                    // Attempt to find the outermost JSON array or object
+                    const match = jsonResponse.match(/^\[[\s\S]*\]$|^\{[\s\S]*\}$/);
+                    if (match) {
+                        jsonResponse = match[0];
                     } else {
-                        // If it doesn't look like an array, try to salvage if it's a single object that *should* be an array
+                        // If it's not a direct array/object, try to find one within the string
+                        const firstBracket = jsonResponse.indexOf('[');
+                        const lastBracket = jsonResponse.lastIndexOf(']');
                         const firstCurly = jsonResponse.indexOf('{');
                         const lastCurly = jsonResponse.lastIndexOf('}');
-                        if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
-                            jsonResponse = `[${jsonResponse.substring(firstCurly, lastCurly + 1)}]`; // Wrap single object in array
-                            console.warn("LLM returned a single object instead of an array. Wrapping it in an array for parsing:", jsonResponse);
+
+                        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+                            jsonResponse = jsonResponse.substring(firstBracket, lastBracket + 1);
+                        } else if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
+                             // If it's a single object, wrap it in an array to conform to expected array format
+                            jsonResponse = `[${jsonResponse.substring(firstCurly, lastCurly + 1)}]`;
+                            console.warn("LLM returned a single object instead of an array. Wrapping it in an array for parsing.");
                         } else {
-                            console.error("No valid JSON array or object structure found after cleaning:", jsonResponse);
+                            console.error("No valid JSON array or object structure found after deep cleaning:", jsonResponse);
                             displayMessage('Error: No se encontró una estructura JSON válida en la respuesta del modelo. Intenta de nuevo o simplifica el aviso.', 'error');
                             classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido.</p>';
                             return;
@@ -315,7 +311,7 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                         classifications = JSON.parse(jsonResponse); // Expecting an array
                     } catch (e) {
                         console.error("Error parsing JSON response from LLM:", e);
-                        console.error("Raw LLM response string that failed parsing:", jsonResponse); // Log the string that failed
+                        console.error("Raw LLM response string that failed parsing:", jsonResponse); 
                         displayMessage('Error: La respuesta del modelo no es un JSON válido. Revisa la consola.', 'error');
                         classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido. Intenta de nuevo o simplifica el aviso.</p>';
                         return;
