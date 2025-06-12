@@ -14,7 +14,7 @@
             color: #333;
         }
         .container {
-            max-width: 900px; /* Adjusted max-width for cleaner layout */
+            max-width: 1200px; /* Increased max-width for side-by-side layout */
         }
         textarea {
             resize: vertical;
@@ -65,12 +65,14 @@
             <h1 class="text-4xl font-extrabold text-blue-800 mb-6 text-center">Clasificador CIIU (Rev. 4) de Avisos Laborales</h1>
             <p class="text-center text-gray-600 mb-8">Pega el título y una parte del cuerpo de **varios avisos laborales**, separados por la línea `--- AVISO ---`.</p>
 
-            <div class="mb-6">
-                <h2 class="text-2xl font-bold text-blue-700 mb-3">Texto(s) del Aviso Laboral</h2>
-                <textarea
-                    id="jobPostingText"
-                    class="w-full p-4 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                    placeholder="Ejemplo:
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Input Section (Left) -->
+                <div class="p-6 bg-white rounded-lg shadow-md">
+                    <h2 class="text-2xl font-bold text-blue-700 mb-3">Texto(s) del Aviso Laboral</h2>
+                    <textarea
+                        id="jobPostingText"
+                        class="w-full p-4 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                        placeholder="Ejemplo:
 Título: Ingeniero de Software Senior
 Cuerpo: Buscamos un ingeniero de software experimentado para desarrollar y mantener aplicaciones web en un entorno ágil. Experiencia con Python y React es un plus.
 
@@ -79,7 +81,22 @@ Cuerpo: Buscamos un ingeniero de software experimentado para desarrollar y mante
 Título: Especialista en Marketing Digital
 Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas publicitarias. Experiencia con Google Ads y Facebook Ads es deseable.
 "
-                ></textarea>
+                    ></textarea>
+                </div>
+
+                <!-- Output Section (Right) -->
+                <div class="p-6 bg-green-50 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-bold text-green-700 mb-3">Resultados de la Clasificación CIIU</h2>
+                    <div id="classificationResult" class="p-4 border border-green-300 rounded-md bg-gray-50 min-h-[100px] text-gray-700">
+                        <p>Las clasificaciones aparecerán aquí (Código y Descripción CIIU).</p>
+                    </div>
+                    <button
+                        id="copyResultButton"
+                        class="btn-primary mt-4 w-full md:w-auto"
+                    >
+                        Copiar Resultados
+                    </button>
+                </div>
             </div>
 
             <div class="flex justify-center mt-6">
@@ -94,19 +111,6 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
             <div id="loadingIndicator" class="loading-indicator hidden mt-6">
                 <div class="spinner"></div> Clasificando avisos...
             </div>
-
-            <div class="mt-8 p-6 bg-green-50 rounded-lg shadow-md">
-                <h2 class="text-2xl font-bold text-green-700 mb-3">Resultados de la Clasificación CIIU</h2>
-                <div id="classificationResult" class="p-4 border border-green-300 rounded-md bg-gray-50 min-h-[100px] text-gray-700">
-                    <p>Las clasificaciones aparecerán aquí (Código y Descripción CIIU).</p>
-                </div>
-                <button
-                    id="copyResultButton"
-                    class="btn-primary mt-4 w-full md:w-auto"
-                >
-                    Copiar Resultados
-                </button>
-            </div>
             <div id="messageDisplay" class="mt-6 text-center text-red-600 font-semibold"></div>
         </div>
     </div>
@@ -119,9 +123,9 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
         const copyResultButton = document.getElementById('copyResultButton');
         const messageDisplay = document.getElementById('messageDisplay');
 
-        // IMPORTANT: Replace "TU_CLAVE_DE_API_DE_GEMINI_AQUI" with your actual Gemini API Key.
+        // IMPORTANT: Replace "AIzaSyA7IkWUlourFP4_sf9014fcHIlM-oFIx-U" with your actual Gemini API Key.
         // This key will be publicly visible in the source code if deployed on Vercel.
-        const apiKey = "AIzaSyA7IkWUlourFP4_sf9014fcHIlM-oFIx-U"; 
+        const apiKey = "TU_CLAVE_DE_API_DE_GEMINI_AQUI"; 
         // For Canvas environment, leave apiKey = "" if you want Canvas to inject it.
         // For Vercel, you MUST put your actual key here for a simple HTML/JS app.
 
@@ -148,15 +152,13 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
          * @returns {string} The cleaned ID string (e.g., "1") or the original if cleaning fails.
          */
         function extractAvisoId(idString) {
-            if (typeof idString !== 'string') return String(idString); // Ensure it's a string
+            if (typeof idString !== 'string') return String(idString); 
             
-            // Try to match only leading digits
             const leadingDigitsMatch = idString.match(/^\d+/);
             if (leadingDigitsMatch) {
                 return leadingDigitsMatch[0];
             }
 
-            // If not just leading digits, try to extract from a potential JSON snippet
             try {
                 const embeddedJsonMatch = idString.match(/\"aviso_id\":\s*\"(\d+)\"/);
                 if (embeddedJsonMatch && embeddedJsonMatch[1]) {
@@ -166,16 +168,13 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
                 // Do nothing, just proceed to fallback
             }
 
-            // Fallback: take the first part if it contains a common JSON separator
             if (idString.includes(',')) {
                 return idString.split(',')[0].trim();
             }
             if (idString.includes(':')) {
-                // This might be a key:value pair, try to extract value
                 const parts = idString.split(':');
                 if (parts.length > 1) {
                     const valuePart = parts[1].trim();
-                    // If it starts with a quote, remove it and find closing quote
                     if (valuePart.startsWith('"')) {
                         const closingQuoteIndex = valuePart.indexOf('"', 1);
                         if (closingQuoteIndex !== -1) {
@@ -314,24 +313,35 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                         return;
                     }
 
-                    if (Array.isArray(classifications) && classifications.length > 0) {
+                    if (Array.isArray(classifications)) { // Removed classifications.length > 0 check here
                         let htmlResult = '';
-                        classifications.forEach((classification, index) => {
-                            // Find the original posting by aviso_id if available, otherwise use index
-                            const originalPostingIndex = (typeof classification.aviso_id === 'string' && !isNaN(parseInt(classification.aviso_id))) ? parseInt(classification.aviso_id) - 1 : index;
-                            const originalPosting = jobPostings[originalPostingIndex] || 'Aviso no encontrado';
+                        jobPostings.forEach((originalPosting, index) => { // Iterate over original inputs
+                            const currentAvisoId = String(index + 1); // Avisos are 1-indexed
+                            // Find the classification for this specific original posting
+                            const foundClassification = classifications.find(
+                                c => extractAvisoId(String(c.aviso_id)) === currentAvisoId
+                            );
+
+                            const ciiuCode = foundClassification ? foundClassification.codigo_ciiu || 'N/A' : 'N/A';
+                            const ciiuDesc = foundClassification ? foundClassification.descripcion_ciiu || 'No clasificado' : 'No clasificado';
 
                             htmlResult += `
                                 <div class="mb-4 p-3 border border-gray-300 rounded-md bg-white shadow-sm">
-                                    <p class="font-bold text-md text-blue-700 mb-2">Aviso ${extractAvisoId(classification.aviso_id) || (originalPostingIndex + 1)}:</p>
+                                    <p class="font-bold text-md text-blue-700 mb-2">Aviso ${currentAvisoId}:</p>
                                     <pre class="whitespace-pre-wrap text-xs text-gray-600 mb-2 max-h-24 overflow-y-auto border border-gray-200 p-2 rounded">${originalPosting}</pre>
-                                    <p class="font-bold text-lg">Código CIIU: <span class="text-blue-800">${classification.codigo_ciiu || 'N/A'}</span></p>
-                                    <p class="mt-1">Descripción: <span class="text-gray-800">${classification.descripcion_ciiu || 'No clasificado'}</span></p>
+                                    <p class="font-bold text-lg">Código CIIU: <span class="text-blue-800">${ciiuCode}</span></p>
+                                    <p class="mt-1">Descripción: <span class="text-gray-800">${ciiuDesc}</span></p>
                                 </div>
                             `;
                         });
-                        classificationResultElem.innerHTML = htmlResult;
-                        displayMessage('Clasificación realizada con éxito para todos los avisos.', 'success');
+
+                        if (jobPostings.length > 0) {
+                            classificationResultElem.innerHTML = htmlResult;
+                            displayMessage('Clasificación realizada con éxito.', 'success');
+                        } else {
+                            classificationResultElem.innerHTML = '<p>No se detectaron avisos laborales para clasificar.</p>';
+                            displayMessage('No se detectaron avisos laborales para clasificar.', 'info');
+                        }
                     } else {
                         console.error("La respuesta del modelo no es una lista de clasificaciones válida:", classifications);
                         displayMessage('Error: El modelo no devolvió una lista de clasificaciones válida.', 'error');
