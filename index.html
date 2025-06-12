@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clasificador CIIU (Rev. 5) de Avisos Laborales</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
-    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap)" rel="stylesheet">
+    <!-- Tailwind CSS CDN - CORREGIDO: se quitaron los corchetes extra -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - CORREGIDO: se quitaron los corchetes extra -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -121,7 +122,7 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
 
         // IMPORTANT: Replace "TU_CLAVE_DE_API_DE_GEMINI_AQUI" with your actual Gemini API Key.
         // This key will be publicly visible in the source code if deployed on Vercel.
-        const apiKey = "AIzaSyA7IkWUlourFP4_sf9014fcHIlM-oFIx-U"; 
+        const apiKey = "TU_CLAVE_DE_API_DE_GEMINI_AQUI"; 
         // For Canvas environment, leave apiKey = "" if you want Canvas to inject it.
         // For Vercel, you MUST put your actual key here for a simple HTML/JS app.
 
@@ -167,19 +168,19 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
 
                 // Prompt for the LLM to classify based on ISIC Rev. 5
                 const prompt = `Clasifica los siguientes avisos laborales de acuerdo con la Clasificación Industrial Internacional Uniforme de todas las Actividades Económicas (CIIU), Revisión 5.
-Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe contener las claves "aviso_id" (un identificador numérico simple, comenzando en 1), "codigo_ciiu" (código de 4 dígitos), y "descripcion_ciiu" (descripción principal).
+Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe contener las claves "aviso_id" (un identificador numérico simple, comenzando en 1, como una cadena de texto para evitar problemas de formato), "codigo_ciiu" (código de 4 dígitos), y "descripcion_ciiu" (descripción principal).
 Si no puedes clasificar un aviso específico, usa "N/A" para el código y "No se pudo clasificar" para la descripción de ese aviso.
-¡IMPORTANTE! Tu respuesta DEBE ser solo el array JSON, sin texto adicional, preámbulo, postámbulo o bloques de markdown (como \`\`\`json\`). Asegúrate de que el "aviso_id" sea un número entero simple (ej. 1, 2, 3), no notación científica ni decimal.
+¡IMPORTANTE! Tu respuesta DEBE ser solo el array JSON, sin texto adicional, preámbulo, postámbulo o bloques de markdown (como \`\`\`json\`). Asegúrate de que el "aviso_id" sea un número entero simple (ej. "1", "2", "3"), como una cadena de texto.
 
 Formato de respuesta esperado (ejemplo de array JSON):
 [
   {
-    "aviso_id": 1,
+    "aviso_id": "1",
     "codigo_ciiu": "6201",
     "descripcion_ciiu": "Actividades de programación informática"
   },
   {
-    "aviso_id": 2,
+    "aviso_id": "2",
     "codigo_ciiu": "7020",
     "descripcion_ciiu": "Actividades de consultoría de gestión"
   }
@@ -201,11 +202,11 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                             items: {
                                 type: "OBJECT",
                                 properties: {
-                                    "aviso_id": { "type": "NUMBER" },
+                                    "aviso_id": { "type": "STRING" }, // CAMBIADO A STRING
                                     "codigo_ciiu": { "type": "STRING" },
                                     "descripcion_ciiu": { "type": "STRING" }
                                 },
-                                "propertyOrdering": ["codigo_ciiu", "descripcion_ciiu", "aviso_id"] // Reordered for better consistency with prompt example
+                                "propertyOrdering": ["codigo_ciiu", "descripcion_ciiu", "aviso_id"]
                             }
                         }
                     }
@@ -223,7 +224,6 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                 if (!response.ok) {
                     const errorBody = await response.text();
                     console.error("HTTP error response:", response.status, response.statusText, errorBody);
-                    // Attempt to parse JSON error if available, otherwise show generic message
                     try {
                         const errorJson = JSON.parse(errorBody);
                         displayMessage(`Error de la API: ${errorJson.error.message || response.statusText}. Código: ${response.status}`, 'error');
@@ -231,22 +231,18 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                         displayMessage(`Error de la API: ${response.statusText}. Código: ${response.status}`, 'error');
                     }
                     classificationResultElem.innerHTML = `<p>Error al conectar con la API. Código de estado: ${response.status}.</p>`;
-                    return; // Exit early
+                    return;
                 }
 
                 const result = await response.json();
 
-                // Check for candidates and content. If missing, log the full result for debugging.
                 if (result.candidates && result.candidates.length > 0 &&
                     result.candidates[0].content && result.candidates[0].content.parts &&
                     result.candidates[0].content.parts.length > 0) {
                     let jsonResponse = result.candidates[0].content.parts[0].text;
                     
-                    // NEW: More aggressive cleaning for JSON from LLM
-                    // Remove any markdown code block fences (e.g., ```json, ```javascript, ```python, ```)
+                    // More aggressive cleaning for JSON from LLM
                     jsonResponse = jsonResponse.replace(/```(?:json|javascript|python)?\s*([\s\S]*?)\s*```/g, '$1').trim();
-                    // Remove any text before/after potential JSON array/object structures
-                    // This regex tries to find the first opening bracket [ or curly brace { and the last closing one ] or }
                     const jsonMatch = jsonResponse.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
                     if (jsonMatch) {
                         jsonResponse = jsonMatch[0];
@@ -266,19 +262,19 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                         console.error("Raw LLM response (could not parse):", jsonResponse);
                         displayMessage('Error: La respuesta del modelo no es un JSON válido. Revisa la consola.', 'error');
                         classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido. Intenta de nuevo o simplifica el aviso.</p>';
-                        return; // Exit if JSON parsing fails
+                        return;
                     }
 
                     if (Array.isArray(classifications) && classifications.length > 0) {
                         let htmlResult = '';
                         classifications.forEach((classification, index) => {
                             // Find the original posting by aviso_id if available, otherwise use index
-                            const originalPostingIndex = classification.aviso_id ? classification.aviso_id - 1 : index;
+                            const originalPostingIndex = (typeof classification.aviso_id === 'string' && !isNaN(parseInt(classification.aviso_id))) ? parseInt(classification.aviso_id) - 1 : index;
                             const originalPosting = jobPostings[originalPostingIndex] || 'Aviso no encontrado';
 
                             htmlResult += `
                                 <div class="mb-4 p-3 border border-gray-300 rounded-md bg-white shadow-sm">
-                                    <p class="font-bold text-md text-blue-700 mb-2">Aviso ${classification.aviso_id || originalPostingIndex + 1}:</p>
+                                    <p class="font-bold text-md text-blue-700 mb-2">Aviso ${classification.aviso_id || (originalPostingIndex + 1)}:</p>
                                     <pre class="whitespace-pre-wrap text-xs text-gray-600 mb-2 max-h-24 overflow-y-auto border border-gray-200 p-2 rounded">${originalPosting}</pre>
                                     <p class="font-bold text-lg">Código CIIU: <span class="text-blue-800">${classification.codigo_ciiu || 'N/A'}</span></p>
                                     <p class="mt-1">Descripción: <span class="text-gray-800">${classification.descripcion_ciiu || 'No clasificado'}</span></p>
