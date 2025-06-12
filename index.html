@@ -214,26 +214,11 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
                     return;
                 }
 
-                // Prompt for the LLM to classify based on ISIC Rev. 4
+                // Prompt for the LLM to classify based on ISIC Rev. 4 - SIMPLIFIED
                 const prompt = `Clasifica los siguientes avisos laborales de acuerdo con la Clasificación Industrial Internacional Uniforme de todas las Actividades Económicas (CIIU), Revisión 4.
-Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe contener las claves "aviso_id" (un identificador numérico simple, comenzando en 1, como una cadena de texto para evitar problemas de formato), "codigo_ciiu" (código de 4 dígitos), y "descripcion_ciiu" (descripción principal).
-Si no puedes clasificar un aviso específico, usa "N/A" para el código y "No se pudo clasificar" para la descripción de ese aviso.
-Intenta inferir la clasificación con la mayor precisión posible (código de 4 dígitos) incluso si el aviso es muy breve o usa solo palabras clave, basándote en la naturaleza del puesto, las responsabilidades y la industria implícita. Si el texto no proporciona suficiente información para una clasificación específica de 4 dígitos, intenta encontrar el grupo más relevante. Solo usa "N/A" si la información es completamente insuficiente o contradictoria para cualquier clasificación CIIU.
-¡IMPORTANTE! Tu respuesta DEBE ser solo el array JSON, sin texto adicional, preámbulo, postámbulo o bloques de markdown (como \`\`\`json\`). Asegúrate de que el campo "aviso_id" contenga **SOLO el número de identificación como una cadena de texto** (ej. "1", "2"), sin comas, llaves, comillas dobles, el prefijo "Aviso" o cualquier otro texto/dato JSON. El array JSON DEBE ser la única salida.
-
-Formato de respuesta esperado (ejemplo de array JSON):
-[
-  {
-    "aviso_id": "1",
-    "codigo_ciiu": "6201",
-    "descripcion_ciiu": "Actividades de programación informática"
-  },
-  {
-    "aviso_id": "2",
-    "codigo_ciiu": "7020",
-    "descripcion_ciiu": "Actividades de consultoría de gestión"
-  }
-]
+Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe tener las claves "aviso_id" (un número secuencial como cadena, "1", "2", etc.), "codigo_ciiu" (el código de 4 dígitos de la CIIU Rev. 4), y "descripcion_ciiu" (la descripción oficial de esa actividad).
+Si un aviso laboral no puede ser clasificado claramente, usa "N/A" para "codigo_ciiu" y "No se pudo clasificar" para "descripcion_ciiu".
+Asegúrate de que el campo "aviso_id" contenga **SOLO el número de identificación como una cadena de texto** (ej. "1", "2"), sin comas, llaves, comillas dobles, el prefijo "Aviso" o cualquier otro texto/dato JSON. La salida DEBE ser exclusivamente el array JSON.
 
 Avisos laborales a clasificar, cada uno precedido por 'Aviso [ID_NUMERO]:':
 ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
