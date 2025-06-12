@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clasificador CIIU (Rev. 4) de Avisos Laborales</title>
-    <!-- Tailwind CSS CDN - CORREGIDO: se quitaron los corchetes extra -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts - CORREGIDO: se quitaron los corchetes extra -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -170,6 +169,7 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
                 const prompt = `Clasifica los siguientes avisos laborales de acuerdo con la Clasificación Industrial Internacional Uniforme de todas las Actividades Económicas (CIIU), Revisión 4.
 Proporciona ÚNICAMENTE una lista de objetos JSON. Cada objeto en la lista debe contener las claves "aviso_id" (un identificador numérico simple, comenzando en 1, como una cadena de texto para evitar problemas de formato), "codigo_ciiu" (código de 4 dígitos), y "descripcion_ciiu" (descripción principal).
 Si no puedes clasificar un aviso específico, usa "N/A" para el código y "No se pudo clasificar" para la descripción de ese aviso.
+Intenta inferir la clasificación con la mayor precisión posible (código de 4 dígitos) incluso si el aviso es muy breve o usa solo palabras clave, basándote en la naturaleza del puesto, las responsabilidades y la industria implícita. Si el texto no proporciona suficiente información para una clasificación específica de 4 dígitos, intenta encontrar el grupo más relevante. Solo usa "N/A" si la información es completamente insuficiente o contradictoria para cualquier clasificación CIIU.
 ¡IMPORTANTE! Tu respuesta DEBE ser solo el array JSON, sin texto adicional, preámbulo, postámbulo o bloques de markdown (como \`\`\`json\`). Asegúrate de que el "aviso_id" sea un número entero simple (ej. "1", "2", "3"), como una cadena de texto.
 
 Formato de respuesta esperado (ejemplo de array JSON):
