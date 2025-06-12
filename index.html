@@ -204,7 +204,7 @@ Cuerpo: Necesitamos un experto en SEO/SEM y redes sociales para campañas public
                 const jobPostings = rawJobPostingText.split('--- AVISO ---').map(s => s.trim()).filter(s => s.length > 0);
 
                 // DEBUGGING: Log parsed job postings
-                console.log("Parsed jobPostings:", jobPostings);
+                console.log("Parsed jobPostings (input to LLM prompt):", jobPostings);
 
 
                 if (jobPostings.length === 0) {
@@ -272,7 +272,7 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                 // Check if the HTTP response itself was successful
                 if (!response.ok) {
                     const errorBody = await response.text();
-                    console.error("HTTP error response:", response.status, response.statusText, errorBody);
+                    console.error("HTTP error response (status:", response.status, "):", errorBody);
                     try {
                         const errorJson = JSON.parse(errorBody);
                         displayMessage(`Error de la API: ${errorJson.error.message || response.statusText}. Código: ${response.status}`, 'error');
@@ -285,8 +285,8 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
 
                 const result = await response.json();
 
-                // DEBUGGING: Log raw LLM response
-                console.log("Raw LLM response:", result);
+                // DEBUGGING: Log raw LLM response (full object)
+                console.log("Raw LLM response (full object):", result);
 
 
                 if (result.candidates && result.candidates.length > 0 &&
@@ -294,6 +294,10 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                     result.candidates[0].content.parts.length > 0) {
                     let jsonResponse = result.candidates[0].content.parts[0].text;
                     
+                    // DEBUGGING: Log raw LLM text response (before cleaning)
+                    console.log("Raw LLM text response (before cleaning):", jsonResponse);
+
+
                     // More aggressive cleaning for JSON from LLM
                     jsonResponse = jsonResponse.replace(/```(?:json|javascript|python)?\s*([\s\S]*?)\s*```/g, '$1').trim();
                     
@@ -304,19 +308,29 @@ ${jobPostings.map((post, index) => `Aviso ${index + 1}:\n${post}`).join('\n\n')}
                     if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
                         jsonResponse = jsonResponse.substring(firstBracket, lastBracket + 1);
                     } else {
-                        console.error("No valid JSON array structure found after cleaning:", jsonResponse);
-                        displayMessage('Error: No se encontró una estructura JSON válida (array) en la respuesta del modelo.', 'error');
-                        classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido. Intenta de nuevo o simplifica el aviso.</p>';
-                        return;
+                        // If it doesn't look like an array, try to salvage if it's a single object that *should* be an array
+                        const firstCurly = jsonResponse.indexOf('{');
+                        const lastCurly = jsonResponse.lastIndexOf('}');
+                        if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
+                            jsonResponse = `[${jsonResponse.substring(firstCurly, lastCurly + 1)}]`; // Wrap single object in array
+                            console.warn("LLM returned a single object instead of an array. Wrapping it in an array for parsing:", jsonResponse);
+                        } else {
+                            console.error("No valid JSON array or object structure found after cleaning:", jsonResponse);
+                            displayMessage('Error: No se encontró una estructura JSON válida en la respuesta del modelo. Intenta de nuevo o simplifica el aviso.', 'error');
+                            classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido.</p>';
+                            return;
+                        }
                     }
 
+                    // DEBUGGING: Log the cleaned JSON string before parsing
+                    console.log("Cleaned JSON string (before parsing):", jsonResponse);
 
                     let classifications;
                     try {
                         classifications = JSON.parse(jsonResponse); // Expecting an array
                     } catch (e) {
                         console.error("Error parsing JSON response from LLM:", e);
-                        console.error("Raw LLM response (could not parse):", jsonResponse);
+                        console.error("Raw LLM response string that failed parsing:", jsonResponse); // Log the string that failed
                         displayMessage('Error: La respuesta del modelo no es un JSON válido. Revisa la consola.', 'error');
                         classificationResultElem.innerHTML = '<p>Error: Formato de respuesta JSON inválido. Intenta de nuevo o simplifica el aviso.</p>';
                         return;
